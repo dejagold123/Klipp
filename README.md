@@ -334,10 +334,3 @@ Fast, cheap, and capable enough for transcript analysis. The ranking prompt is s
 - Llama-2/Phi-3 local inference is unverified on a low-resource (CPU-only, limited RAM) host - expect it to be slow or to not fit at all without a beefier machine.
 
 ---
-
-## Submission Checklist
-
-- [ ] Public GitHub repository
-- [ ] Live deployment URL
-- [ ] README documentation (this file)
-- [ ] Demo video or screenshots
