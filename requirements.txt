@@ -32,7 +32,7 @@ llama-cpp-python==0.2.36
 # (Already included above with torch and transformers)
 
 # Video Processing
-ffmpeg-python==0.2.1
+ffmpeg-python==0.2.0
 
 # Utilities
 requests==2.31.0
