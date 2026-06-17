@@ -1,0 +1,38 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+redis==5.0.8
+rq==1.16.2
+yt-dlp==2024.8.6
+openai==1.45.0
+pydantic==2.9.0
+python-dotenv==1.0.1
+
+# Speech-to-Text Providers
+# Recommended: Vosk (offline, lightweight)
+vosk==0.3.45
+librosa==0.10.0
+numpy==1.24.3
+
+# Alternative STT: Coqui STT (neural network-based)
+# coqui-stt==1.4.0
+
+# Alternative STT: wav2vec 2.0 (state-of-the-art, requires PyTorch)
+torch==2.1.1
+torchaudio==2.1.1
+transformers==4.36.2
+
+# LLM Providers (experimental, opt-in - not the default)
+# Recommended: Mistral API or Ollama (local)
+mistralai==0.4.2
+
+# Alternative LLM: Llama-2 (local, requires llama-cpp-python)
+llama-cpp-python==0.2.36
+
+# Alternative LLM: Phi-3 (efficient, requires transformers + torch)
+# (Already included above with torch and transformers)
+
+# Video Processing
+ffmpeg-python==0.2.1
+
+# Utilities
+requests==2.31.0

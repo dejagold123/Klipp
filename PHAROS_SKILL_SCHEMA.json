@@ -1,0 +1,344 @@
+{
+  "name": "VideoClipExtractor",
+  "version": "1.0.0",
+  "description": "Autonomous content-extraction skill that converts long-form media into high-impact short-form video clips through transcription, semantic analysis, and automated clipping. Supports both OpenAI and open-source models for maximum flexibility.",
+  "author": "dejagold123",
+  "tags": ["video", "ai-agent", "content-extraction", "automation", "media-processing"],
+  "inputs": {
+    "properties": {
+      "video_url": {
+        "type": "string",
+        "description": "URL of the video to process (YouTube, HTTP(S), or local path)",
+        "example": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+      },
+      "max_clips": {
+        "type": "integer",
+        "description": "Maximum number of clips to extract (1-10)",
+        "default": 3,
+        "minimum": 1,
+        "maximum": 10
+      },
+      "min_clip_seconds": {
+        "type": "integer",
+        "description": "Minimum duration of each clip in seconds (≥5)",
+        "default": 15,
+        "minimum": 5
+      },
+      "max_clip_seconds": {
+        "type": "integer",
+        "description": "Maximum duration of each clip in seconds (≤180)",
+        "default": 60,
+        "maximum": 180
+      },
+      "llm_provider": {
+        "type": "string",
+        "description": "LLM provider for moment ranking: 'openai' (GPT-4o-mini, default), 'mistral' (Mistral API), 'llama' (local Llama-2 GGUF), 'phi' (local Phi-3), or 'local' (Ollama)",
+        "enum": ["openai", "mistral", "llama", "phi", "local"],
+        "default": "openai"
+      },
+      "stt_provider": {
+        "type": "string",
+        "description": "Speech-to-text provider: 'openai' (Whisper API, default), 'vosk' (local, offline), or 'wav2vec' (Meta, local)",
+        "enum": ["openai", "vosk", "wav2vec"],
+        "default": "openai"
+      },
+      "webhook_url": {
+        "type": "string",
+        "description": "Optional webhook URL to notify when job completes (for async agents)",
+        "example": "https://agent.example.com/webhooks/klipp-complete"
+      }
+    },
+    "required": ["video_url"]
+  },
+  "outputs": {
+    "properties": {
+      "job_id": {
+        "type": "string",
+        "description": "Unique identifier for this extraction job"
+      },
+      "status": {
+        "type": "string",
+        "enum": ["queued", "downloading", "transcribing", "ranking", "clipping", "done", "failed"],
+        "description": "Current job status in the processing pipeline"
+      },
+      "clips": {
+        "type": "array",
+        "description": "Array of extracted clips with metadata",
+        "items": {
+          "type": "object",
+          "properties": {
+            "clip_filename": {
+              "type": "string",
+              "description": "Filename of the produced clip, e.g. used as GET /clips/{filename}"
+            },
+            "download_url": {
+              "type": "string",
+              "description": "Full URL (absolute if KLIPP_BASE_URL is set, otherwise relative) to download the clip"
+            },
+            "start": {
+              "type": "number",
+              "description": "Start timestamp in seconds"
+            },
+            "end": {
+              "type": "number",
+              "description": "End timestamp in seconds"
+            },
+            "duration": {
+              "type": "number",
+              "description": "Duration in seconds"
+            },
+            "reason": {
+              "type": "string",
+              "description": "AI-generated reason why this moment is engaging"
+            },
+            "score": {
+              "type": "number",
+              "description": "Engagement score 0-10"
+            }
+          }
+        }
+      },
+      "error": {
+        "type": "string",
+        "description": "Error message if status is 'failed'"
+      },
+      "metadata": {
+        "type": "object",
+        "properties": {
+          "video_title": {
+            "type": "string"
+          },
+          "duration_seconds": {
+            "type": "number"
+          },
+          "transcript_length": {
+            "type": "integer",
+            "description": "Number of words in transcript"
+          },
+          "processing_time_seconds": {
+            "type": "number"
+          }
+        }
+      }
+    }
+  },
+  "actions": [
+    {
+      "name": "submit_job",
+      "description": "Submit a video URL for clip extraction",
+      "parameters": {
+        "video_url": {
+          "type": "string",
+          "required": true
+        },
+        "max_clips": {
+          "type": "integer",
+          "default": 3
+        },
+        "llm_provider": {
+          "type": "string",
+          "default": "openai"
+        },
+        "stt_provider": {
+          "type": "string",
+          "default": "openai"
+        }
+      },
+      "endpoint": "POST /jobs"
+    },
+    {
+      "name": "get_job_status",
+      "description": "Poll the status of a clip extraction job",
+      "parameters": {
+        "job_id": {
+          "type": "string",
+          "required": true
+        }
+      },
+      "endpoint": "GET /jobs/{job_id}"
+    },
+    {
+      "name": "download_clip",
+      "description": "Download a generated clip file",
+      "parameters": {
+        "filename": {
+          "type": "string",
+          "required": true
+        }
+      },
+      "endpoint": "GET /clips/{filename}"
+    },
+    {
+      "name": "health_check",
+      "description": "Check if the skill service is healthy",
+      "parameters": {},
+      "endpoint": "GET /healthz"
+    }
+  ],
+  "dependencies": {
+    "required": [
+      "python>=3.11",
+      "fastapi",
+      "redis",
+      "rq"
+    ],
+    "optional": {
+      "openai": "For Whisper API transcription and GPT-4o-mini ranking (default, working path)",
+      "mistralai": "For Mistral API LLM ranking - cheap, needs a free-tier API key",
+      "vosk": "For offline, free speech-to-text",
+      "torch": "For wav2vec 2.0 or Phi-3 local inference",
+      "llama-cpp-python": "For local Llama-2 GGUF inference (you must supply the model weights)",
+      "yt-dlp": "For video downloading",
+      "ffmpeg": "For video processing"
+    }
+  },
+  "configuration": {
+    "OPENAI_API_KEY": {
+      "type": "string",
+      "description": "OpenAI API key. Required for the default providers (openai/openai); not needed if you override both llm_provider and stt_provider to non-OpenAI options.",
+      "required_if": "llm_provider='openai' or stt_provider='openai' (the defaults)"
+    },
+    "REDIS_URL": {
+      "type": "string",
+      "description": "Redis connection URL",
+      "default": "redis://localhost:6379"
+    },
+    "KLIPP_CLIPS_DIR": {
+      "type": "string",
+      "description": "Directory to store generated clips",
+      "default": "/data/clips"
+    },
+    "KLIPP_WORK_DIR": {
+      "type": "string",
+      "description": "Temporary working directory for processing",
+      "default": "/tmp/klipp"
+    },
+    "KLIPP_API_KEY": {
+      "type": "string",
+      "description": "Optional secret. If set, /jobs and /clips require it in the X-API-Key header. /skill and /healthz stay open.",
+      "default": null
+    },
+    "KLIPP_BASE_URL": {
+      "type": "string",
+      "description": "Optional. Set to your deployment URL so clip download_url fields are absolute instead of relative.",
+      "default": null
+    },
+    "DEFAULT_LLM_PROVIDER": {
+      "type": "string",
+      "description": "Default LLM provider if not specified in request",
+      "default": "openai",
+      "enum": ["openai", "mistral", "llama", "phi", "local"]
+    },
+    "DEFAULT_STT_PROVIDER": {
+      "type": "string",
+      "description": "Default STT provider if not specified in request",
+      "default": "openai",
+      "enum": ["openai", "vosk", "wav2vec"]
+    },
+    "MISTRAL_API_KEY": {
+      "type": "string",
+      "description": "Required only if llm_provider='mistral' is used on a request",
+      "required_if": "llm_provider='mistral'"
+    },
+    "PHAROS_ENABLED": {
+      "type": "boolean",
+      "description": "Master switch for webhook notifications on job completion/failure",
+      "default": true
+    },
+    "PHAROS_WEBHOOK_URL": {
+      "type": "string",
+      "description": "Optional default webhook target used when a request doesn't supply its own webhook_url",
+      "default": null
+    }
+  },
+  "security": {
+    "permissions": [
+      "network_access",
+      "file_system_access",
+      "process_execution"
+    ],
+    "features": [
+      "Input validation (video URL, duration constraints)",
+      "Error handling and graceful degradation",
+      "Job isolation via Redis Queue",
+      "Output sanitization"
+    ]
+  },
+  "performance": {
+    "async_execution": true,
+    "timeout_seconds": 3600,
+    "max_concurrent_jobs": 5,
+    "response_time_ms": "< 500ms for job submission"
+  },
+  "compatibility": {
+    "agent_frameworks": [
+      "Pharos Autonomous Agents",
+      "OpenAI Function Calling",
+      "LangChain",
+      "AutoGPT"
+    ],
+    "deployment_targets": [
+      "Local Docker",
+      "Railway.app",
+      "Pharos Testnet",
+      "Kubernetes"
+    ]
+  },
+  "error_handling": {
+    "invalid_url": "400 Bad Request - Invalid video URL",
+    "download_failed": "500 Internal Server Error - Could not download video",
+    "transcription_failed": "500 Internal Server Error - Transcription service unavailable",
+    "processing_timeout": "504 Gateway Timeout - Job exceeded maximum processing time",
+    "service_unavailable": "503 Service Unavailable - Redis or processing service down"
+  },
+  "examples": {
+    "basic_submission": {
+      "curl": "curl -X POST http://localhost:8000/jobs -H 'Content-Type: application/json' -d '{\"video_url\": \"https://www.youtube.com/watch?v=dQw4w9WgXcQ\", \"max_clips\": 3}'",
+      "response": {
+        "job_id": "a3f9c2...",
+        "status": "queued",
+        "clips": []
+      }
+    },
+    "advanced_submission_with_local_models": {
+      "curl": "curl -X POST http://localhost:8000/jobs -H 'Content-Type: application/json' -d '{\"video_url\": \"https://www.youtube.com/watch?v=dQw4w9WgXcQ\", \"max_clips\": 5, \"llm_provider\": \"mistral\", \"stt_provider\": \"vosk\"}'",
+      "response": {
+        "job_id": "b4g0d3...",
+        "status": "queued",
+        "clips": []
+      }
+    },
+    "poll_status": {
+      "curl": "curl http://localhost:8000/jobs/a3f9c2...",
+      "response": {
+        "job_id": "a3f9c2...",
+        "status": "done",
+        "clips": [
+          {
+            "clip_filename": "a3f9c2..._clip1.mp4",
+            "download_url": "/clips/a3f9c2..._clip1.mp4",
+            "start": 42.1,
+            "end": 78.4,
+            "duration": 36.3,
+            "reason": "Strong hook — opens with a surprising claim",
+            "score": 9.2
+          }
+        ],
+        "metadata": {
+          "video_title": "Example Video Title",
+          "duration_seconds": 612.4,
+          "transcript_length": 1840,
+          "processing_time_seconds": 94.2
+        }
+      }
+    }
+  },
+  "testing": {
+    "status": "No automated test suite exists yet. This section is a known gap, not a claim of coverage."
+  },
+  "support": {
+    "documentation": "https://github.com/dejagold123/Klipp/blob/main/README.md",
+    "issues": "https://github.com/dejagold123/Klipp/issues",
+    "discord": "Join the Pharos Discord community for support"
+  }
+}

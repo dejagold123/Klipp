@@ -1,0 +1,12 @@
+# Railway/Nixpacks configuration.
+# Installs FFmpeg and Python, then starts both the API and worker
+# from a single service so they share the same filesystem for clip files.
+
+[phases.setup]
+nixPkgs = ["ffmpeg", "python311"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "bash start.sh"
