@@ -35,4 +35,4 @@ llama-cpp-python==0.2.36
 ffmpeg-python==0.2.0
 
 # Utilities
-requests==2.31.0
+requests==2.32.2
